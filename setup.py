@@ -9,4 +9,7 @@ setup(name='example',
       author_email='bdelwood@users.noreply.github.com',
       license='GPLv3',
       packages=['fluospec'],
-      install_requires=['numpy'])
+      install_requires=['numpy',
+                        'scipy',
+                        'pymc3',
+                        'pandas'])
