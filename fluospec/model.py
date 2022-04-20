@@ -27,8 +27,8 @@ class Prediction():
     
     @classmethod
     def init_with_defaults(cls):
-        theta = {'A': 20,
-                 'w0': 1,
+        theta = {'A': 2,
+                 'w0': 20,
                  'gamma': 5,
                  'intensity_ratio': .5,
                  'm': .05,
@@ -52,8 +52,8 @@ class Prediction():
         ndarray:
             array of the Lorentzian of the parameters  
         """
-        lorentzian = self.A*(self.gamma**2/4)/((w - self.w0)**2  \
-                     + (self.gamma**2/4)*(1+self.intensity_ratio))
+        lorentzian = self.A*(self.gamma**2/4)/((w - self.w0)**2 + \
+                    (self.gamma**2/4)*(1+self.intensity_ratio))
         return lorentzian
     
     def prediction(self,
@@ -186,6 +186,7 @@ class FluoSpecModel():
         sigma_I_data = spec_data_df.sigma_I
         
         with spectroscopy_model:
+            # define priors
             A = pm.Normal('A', *self.A_prior_params)
             w0 = pm.Normal('w0', *self.w0_prior_params)
             gamma = pm.Normal('gamma', *self.gamma_prior_params)
@@ -195,11 +196,14 @@ class FluoSpecModel():
             m = pm.Normal('m', *self.m_prior_params)
             b = pm.Normal('b', *self.b_prior_params)
             
+            # convenient prior vector
             theta = (A, w0, gamma, intensity_ratio, m, b)
                 
+            # predicted intensity
             I_pred = pm.Deterministic('prediction',
                                       Prediction(*theta).prediction(w_data))
          
+            # measurements have normal noise
             measurements = pm.Normal('I_model',
                                      mu=I_pred,
                                      sigma=sigma_I_data,
