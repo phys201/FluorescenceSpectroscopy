@@ -187,11 +187,11 @@ class FluoSpecModel():
         
         with spectroscopy_model:
             # define priors
-            A = pm.Normal('A', *self.A_prior_params)
-            w0 = pm.Normal('w0', *self.w0_prior_params)
-            gamma = pm.Normal('gamma', *self.gamma_prior_params)
-            intensity_ratio = pm.Normal('intensity_ratio',
-                                        *self.intensity_ratio_prior_params)
+            A = pm.Gamma('A', mu = self.A_prior_params[0],sigma = self.A_prior_params[1] )
+            w0 = pm.Gamma('w0',mu = self.w0_prior_params[0],sigma = self.w0_prior_params[1])
+            gamma = pm.Gamma('gamma',mu = self.gamma_prior_params[0],sigma = self.gamma_prior_params[1])
+            intensity_ratio = pm.Gamma('intensity_ratio',
+                                        mu = self.intensity_ratio_prior_params[0],sigma = self.intensity_ratio_prior_params[1])
             
             m = pm.Normal('m', *self.m_prior_params)
             b = pm.Normal('b', *self.b_prior_params)
@@ -211,4 +211,6 @@ class FluoSpecModel():
             
         return spectroscopy_model
 
-    
+   # A = pm.Gamma('A', mu = self.A_prior_params[0],sigma = self.A_prior_params[1] )
+    #        w0 = pm.Gamma('w0',mu = self.A_prior_params[0],sigma = self.A_prior_params[1])
+#w0 = pm.Gamma('w0',*self.w0_prior_params)
