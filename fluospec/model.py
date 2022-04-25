@@ -210,7 +210,3 @@ class FluoSpecModel():
                                      observed=I_data)
             
         return spectroscopy_model
-
-   # A = pm.Gamma('A', mu = self.A_prior_params[0],sigma = self.A_prior_params[1] )
-    #        w0 = pm.Gamma('w0',mu = self.A_prior_params[0],sigma = self.A_prior_params[1])
-#w0 = pm.Gamma('w0',*self.w0_prior_params)
