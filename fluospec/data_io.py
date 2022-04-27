@@ -12,6 +12,22 @@ from pathlib import Path
 
 # TODO: metadata when we have a better idea what final data will look like
 
-def load_data(data_file: Union[str, Path]
+def load_data(data_file: Union[str, Path],
     ) -> pd.DataFrame:
-    return pd.read_csv(data_file)
+    """
+    Loads experimental or simulated data in csv format give filepath name
+    
+    Parameters:
+    -----------
+    data_file : Union[str, Path]
+        string or Path to csv of data
+ 
+    Returns
+    -------
+    pd.DataFrame:
+        DataFrame containing columns of data (w, I, sigma_I)
+    """
+    return pd.read_csv(data_file,
+                       header=None,
+                       names=['w', 'I', 'sigma_I']
+                       )
