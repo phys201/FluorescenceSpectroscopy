@@ -55,13 +55,16 @@ def load_data(data_file: Union[str, Path]
     
     if suffix == '.pkl':
         return pd.read_pickle(data_file)
-    
     if suffix == '.csv':
         return pd.read_csv(data_file,
                            header=None,
                            names=['w', 'I', 'sigma_I']
                            )
+    
     else: 
         raise ValueError(f"Fileype {suffix.strip('.')} not supported, only pkl and csv.")
+    
+
+
                          
     
