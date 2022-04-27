@@ -12,6 +12,8 @@ import pandas as pd
 import pymc3 as pm
 from dataclasses import dataclass
 from pymc3.model import FreeRV
+import arviz as az
+import matplotlib.pyplot as plt
 
 @dataclass
 class Prediction():
@@ -24,6 +26,7 @@ class Prediction():
     intensity_ratio: Union[float, FreeRV]
     m: Union[float, FreeRV]
     b: Union[float, FreeRV]
+    
     
     @classmethod
     def init_with_defaults(cls):
@@ -101,7 +104,6 @@ class SimulateFluoSpec(Prediction):
             Data uncertainty, assuming Gaussian noise and a single uncertainty
             for all data points
             
- 
         Returns
         -------
         ndarray:
@@ -135,7 +137,6 @@ class SimulateFluoSpec(Prediction):
         data_unc:
             Data uncertainty, assuming Gaussian noise and a single uncertainty
             for all data points
-            
  
         Returns
         -------
@@ -161,7 +162,7 @@ class FluoSpecModel():
     m_prior_params: Tuple
     b_prior_params: Tuple
     
-        
+    
     def model(self,
               spec_data_df: pd.DataFrame,
         ) -> pm.Model:
@@ -172,7 +173,6 @@ class FluoSpecModel():
         -----------
         spec_data_df: pd.DataFrame
             dataframe of data to build model for
-            
  
         Returns
         -------
@@ -210,3 +210,9 @@ class FluoSpecModel():
                                      observed=I_data)
             
         return spectroscopy_model
+
+    # TODO: think about extending above to allow multiple models,
+    #       then create helper for model_comparioson
+    def model_comparison():
+        raise NotImplementedError
+    
