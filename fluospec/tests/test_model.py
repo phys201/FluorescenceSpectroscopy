@@ -29,14 +29,14 @@ class TestModel(TestCase):
         loren = pred.lorentzian(w_res)
         self.assertEqual(loren, pred.A)
     
-    def test_prediction1(self):
+    def test_prediction_line(self):
         w = 1
         pred = Prediction.init_with_defaults()
         pred.A = 0
         line = pred.m*w + pred.b
         self.assertEqual(pred.prediction(w), line)
         
-    def test_prediction2(self):
+    def test_prediction_lorentzian(self):
         pred = Prediction.init_with_defaults()
         pred.m = 0
         pred.b = 0
