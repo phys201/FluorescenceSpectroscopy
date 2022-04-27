@@ -8,6 +8,7 @@ from fluospec.model import FluoSpecModel
 from  fluospec.model import SimulateFluoSpec
 from fluospec.data_io import load_data
 from pymc3 import Model
+from os.path import exists
 
 theta = {'A': 2,
          'w0': 20,
@@ -48,7 +49,17 @@ class TestModel(TestCase):
         column_names = ['w', 'I', 'sigma_I']
         self.assertEqual(list(sim_data.columns),column_names)
         
-    #def test_save_sim_data(self):
+    def test_save_sim_data_fi_exists(self):
+        try:
+            sim = SimulateFluoSpec.init_with_defaults()
+            sim.save_sim_data()
+            pwd = Path.cwd()
+            save_path = pwd/Path("fluospec_sim_data.pkl")
+            self.assertTrue(exists(save_path))
+        finally:
+            save_path.unlink()
+        
+        
     def test_FluoSpecModel_returns_Model(self):
         model_sim_params = {
                     'A_prior_params': (2, 1),
