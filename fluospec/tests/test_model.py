@@ -69,7 +69,7 @@ class TestModel(TestCase):
                     'm_prior_params': (.05, .01),
                     'b_prior_params': (2, .04),
                     }
-        data_df = load_data(sim_data_path)
+        data_df = load_data(self.sim_data_path)
         fluospec_model_instance = FluoSpecModel(**model_sim_params)
         generative_model = fluospec_model_instance.model(data_df)
         self.assertTrue(isinstance(generative_model, Model))
