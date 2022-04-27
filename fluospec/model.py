@@ -12,6 +12,8 @@ import pandas as pd
 import pymc3 as pm
 from dataclasses import dataclass
 from pymc3.model import FreeRV
+import arviz as az
+import matplotlib.pyplot as plt
 
 @dataclass
 class Prediction():
@@ -208,3 +210,9 @@ class FluoSpecModel():
                                      observed=I_data)
             
         return spectroscopy_model
+
+    # TODO: think about extending above to allow multiple models,
+    #       then create helper for model_comparioson
+    def model_comparison():
+        raise NotImplementedError
+    
