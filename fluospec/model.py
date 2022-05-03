@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pymc3.model import FreeRV
 import arviz as az
 import matplotlib.pyplot as plt
+from theano.tensor.var import TensorVariable
+
 
 @dataclass
 class Prediction():
@@ -26,16 +28,19 @@ class Prediction():
     intensity_ratio: Union[float, FreeRV]
     m: Union[float, FreeRV]
     b: Union[float, FreeRV]
+    #c: Union[float, FreeRV]
     
     
     @classmethod
     def init_with_defaults(cls):
-        theta = {'A': 2,
-                 'w0': 20,
-                 'gamma': 5,
+        theta = {'A': [2, 1],
+                 'w0': [30, 10],
+                 'gamma': [5, 4],
                  'intensity_ratio': .5,
                  'm': .05,
-                 'b': 2}
+                 'b': 2,
+                 #'c': -1e-4
+                }
         
         return cls(**theta)
     
@@ -55,9 +60,19 @@ class Prediction():
         ndarray:
             array of the Lorentzian of the parameters  
         """
-        lorentzian = self.A*(self.gamma**2/4)/((w - self.w0)**2 + \
-                    (self.gamma**2/4)*(1+self.intensity_ratio))
-        return lorentzian
+        lorentzians = []
+        for i, vals in enumerate(self.A):
+            lorentzian = self.A[i]*(self.gamma[i]**2/4)/((w - self.w0[i])**2 + \
+                        (self.gamma[i]**2/4)*(1+self.intensity_ratio))
+            lorentzians.append(lorentzian)
+            
+        lorentzian_arr = np.vstack(lorentzians)
+        
+        lorentzian_vals = np.sum(lorentzian_arr, axis=0)
+        
+        if isinstance(lorentzian_vals[0], TensorVariable):
+            return lorentzian_vals[0]
+        return lorentzian_vals
     
     def prediction(self,
                    w: np.ndarray
@@ -77,7 +92,7 @@ class Prediction():
             array of model prediction points 
         """
         lorentzian = self.lorentzian(w)
-        line = self.m*w + self.b
+        line = self.m*w + self.b # + self.c*w**2
         model_prediction = line + lorentzian
         return model_prediction
     
@@ -161,6 +176,7 @@ class FluoSpecModel():
     intensity_ratio_prior_params: Tuple
     m_prior_params: Tuple
     b_prior_params: Tuple
+    #c_prior_params: Tuple
     
     
     def model(self,
@@ -187,17 +203,23 @@ class FluoSpecModel():
         
         with spectroscopy_model:
             # define priors
-            A = pm.Gamma('A', mu = self.A_prior_params[0],sigma = self.A_prior_params[1] )
-            w0 = pm.Gamma('w0',mu = self.w0_prior_params[0],sigma = self.w0_prior_params[1])
-            gamma = pm.Gamma('gamma',mu = self.gamma_prior_params[0],sigma = self.gamma_prior_params[1])
-            intensity_ratio = pm.Gamma('intensity_ratio',
-                                        mu = self.intensity_ratio_prior_params[0],sigma = self.intensity_ratio_prior_params[1])
+            As = []
+            w0s = []
+            gammas = []
+            intensity_ratios = []
+            for i, _ in enumerate(self.A_prior_params):
+                As.append(pm.Gamma(f'A_{i}', mu=self.A_prior_params[i][0], sigma=self.A_prior_params[i][1]))
+                w0s.append(pm.Gamma(f'w0_{i}', mu=self.w0_prior_params[i][0], sigma=self.w0_prior_params[i][1]))
+                gammas.append(pm.Gamma(f'gamma_{i}', mu=self.gamma_prior_params[i][0], sigma=self.gamma_prior_params[i][1]))
+            intensity_ratio = pm.Gamma(f'intensity_ratio_{i}',
+                                        mu = self.intensity_ratio_prior_params[0], sigma = self.intensity_ratio_prior_params[1])
             
             m = pm.Normal('m', *self.m_prior_params)
             b = pm.Normal('b', *self.b_prior_params)
+            #c = pm.Normal('c', *self.c_prior_params)
             
             # convenient prior vector
-            theta = (A, w0, gamma, intensity_ratio, m, b)
+            theta = (As, w0s, gammas, intensity_ratio, m, b)#, c)
                 
             # predicted intensity
             I_pred = pm.Deterministic('prediction',
@@ -208,7 +230,7 @@ class FluoSpecModel():
                                      mu=I_pred,
                                      sigma=sigma_I_data,
                                      observed=I_data)
-            
+
         return spectroscopy_model
 
     # TODO: think about extending above to allow multiple models,
