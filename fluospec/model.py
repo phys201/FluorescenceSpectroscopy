@@ -272,7 +272,6 @@ class FluoSpecModel():
                                       Prediction(*theta).prediction(w_data))
             
             if likelihood == 'normal':
-                print('here')
                 measurements = pm.Normal('I_model',
                                           mu=I_pred,
                                           sigma=sigma_I_data,
