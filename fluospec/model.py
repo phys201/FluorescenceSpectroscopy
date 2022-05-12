@@ -155,9 +155,18 @@ class SimulateFluoSpec(Prediction):
 
         prediction = self.prediction(w_sim)
         
-        noise = np.random.normal(0, data_unc, len(w_sim))
+        n = len(prediction)
         
-        sim_data = (prediction + noise)
+        # var = np.ones()*data_unc
+        
+        cov = np.diag(np.ones(n-1)*data_unc/10, -1) + np.diag(np.ones(n)*data_unc, 0) + np.diag(np.ones(n-1)*data_unc/10, 1)
+        
+        # noise = np.random.normal(0, data_unc, len(w_sim))
+        sim_data = np.random.multivariate_normal(prediction, cov, n)
+        
+        # sim_data = (prediction + noise)
+        
+        print(sim_data)
         
         return pd.DataFrame({'w': w_sim,
                              'I': sim_data,
@@ -201,7 +210,7 @@ class FluoSpecModel():
     line_prior_params: List[Tuple]
     m_prior_params: Tuple
     b_prior_params: Tuple
-    scale_prior_params: Tuple = (1)
+    scale_prior_params: Tuple = (None)
     
     
     def model(self,
@@ -271,7 +280,21 @@ class FluoSpecModel():
             I_pred = pm.Deterministic('prediction',
                                       Prediction(*theta).prediction(w_data))
             
-            if likelihood == 'normal':
+            if likelihood == 'mvnormal':
+                print('here')
+                dim = len(I_data)
+                sd_dist = pm.Exponential.dist(.01, shape=dim)
+                chol, corr, stds = pm.LKJCholeskyCov('chol_cov', n=dim, eta=10,
+                                                     sd_dist=sd_dist,
+                                                     compute_corr=True
+                                                     )
+                measurements = pm.MvNormal('I_model',
+                                           mu=I_pred,
+                                           chol=chol,
+                                           observed=I_data
+                                           )
+            
+            elif likelihood == 'normal':
                 measurements = pm.Normal('I_model',
                                           mu=I_pred,
                                           sigma=sigma_I_data,
