@@ -162,11 +162,13 @@ class SimulateFluoSpec(Prediction):
         cov = np.diag(np.ones(n-1)*data_unc/10, -1) + np.diag(np.ones(n)*data_unc, 0) + np.diag(np.ones(n-1)*data_unc/10, 1)
         
         # noise = np.random.normal(0, data_unc, len(w_sim))
-        sim_data = np.random.multivariate_normal(prediction, cov, n)
+        sim_data = np.random.multivariate_normal(prediction, cov)
         
         # sim_data = (prediction + noise)
         
-        print(sim_data)
+        # print(sim_data.shape)
+        
+        # return w_sim, sim_data
         
         return pd.DataFrame({'w': w_sim,
                              'I': sim_data,
@@ -283,8 +285,8 @@ class FluoSpecModel():
             if likelihood == 'mvnormal':
                 print('here')
                 dim = len(I_data)
-                sd_dist = pm.Exponential.dist(.01, shape=dim)
-                chol, corr, stds = pm.LKJCholeskyCov('chol_cov', n=dim, eta=10,
+                sd_dist = pm.Exponential.dist(sigma_I_data, shape=dim)
+                chol, corr, stds = pm.LKJCholeskyCov('chol_cov', n=dim, eta=100,
                                                      sd_dist=sd_dist,
                                                      compute_corr=True
                                                      )
