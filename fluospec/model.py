@@ -5,12 +5,12 @@ Created on Tue Apr 19 21:19:25 2022
 
 @author: brodi
 """
-from typing import Tuple, Union, List
+from typing import Tuple, Union, List, Dict
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import pymc3 as pm
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pymc3.model import FreeRV
 from theano.tensor.var import TensorVariable
 
@@ -66,23 +66,43 @@ class Prediction():
                                 SpectralLines(*line) if not isinstance(line, SpectralLines)
                                 else line
                                 for line in self.spectral_lines
-                                ]
+                               ]
     
     
     @classmethod
-    def init_with_defaults(cls):
-        theta = {'spectral_lines': [
-                                   SpectralLines(2,
-                                                 30,
-                                                 5,
-                                                 .5
-                                                ),
-                                    SpectralLines(1,
-                                                  10,
-                                                  4,
-                                                  .5
-                                                 )
-                                   ],
+    def init_with_defaults(cls,
+                           n_lines: int = 2
+        ):
+        """
+        Class method to to instantiate Prediction with defaults. 
+
+        Parameters
+        ----------
+        n_lines : int, optional
+            Number of spectral lines, 1-2. The default is 2.
+
+        Returns
+        -------
+        Prediction
+            returns a Prediction object with the specified number of spectral
+            lines.
+
+        """
+        spec_lines_list = [
+                        SpectralLines(2,
+                                      30,
+                                      5,
+                                      .5
+                                      ),
+                        SpectralLines(1,
+                                      10,
+                                      4,
+                                      .5
+                                      )
+                        ]
+        spectral_lines_to_use = spec_lines_list[:n_lines]
+        
+        theta = {'spectral_lines': spectral_lines_to_use,
                  'm': .05,
                  'b': 2,
                  }
@@ -131,7 +151,8 @@ class SimulateFluoSpec(Prediction):
     '''
     def generate_sim_data(self, 
                           data_range: Tuple[int, int] = (0, 40),
-                          data_unc: float = .2
+                          data_unc: float = .2,
+                          mvnormal: bool = False
         ) -> pd.DataFrame:
         """
         Generates the simulated data from the model, taking model lineshape
@@ -142,9 +163,15 @@ class SimulateFluoSpec(Prediction):
         data_range: tuple
             (lower, upper) tuple of ranges to generate simulated frequencies
             
-        data_unc:
+        data_unc: float
             Data uncertainty, assuming Gaussian noise and a single uncertainty
             for all data points
+        
+        mvnormal: bool
+            If True, simulate data from multivariate normal noise, with
+            uncertainty on the cov matrix diagonal, and nearest-neighbor
+            correlation
+        
             
         Returns
         -------
@@ -155,21 +182,22 @@ class SimulateFluoSpec(Prediction):
 
         prediction = self.prediction(w_sim)
         
-        n = len(prediction)
-        
-        # var = np.ones()*data_unc
-        
-        cov = np.diag(np.ones(n-1)*data_unc/10, -1) + np.diag(np.ones(n)*data_unc, 0) + np.diag(np.ones(n-1)*data_unc/10, 1)
-        
-        # noise = np.random.normal(0, data_unc, len(w_sim))
-        sim_data = np.random.multivariate_normal(prediction, cov)
-        
-        # sim_data = (prediction + noise)
-        
-        # print(sim_data.shape)
-        
-        # return w_sim, sim_data
-        
+        if mvnormal:
+            n = len(prediction)
+            cov = np.sum(
+                           [
+                             np.diag(np.ones(n-1)*data_unc/10, -1),
+                             np.diag(np.ones(n)*data_unc, 0),
+                             np.diag(np.ones(n-1)*data_unc/10, 1),
+                           ],
+                           axis=0
+                         )
+            
+            sim_data = np.random.multivariate_normal(prediction, cov)
+            
+        else: 
+            sim_data = np.random.normal(prediction, data_unc)
+            
         return pd.DataFrame({'w': w_sim,
                              'I': sim_data,
                              'sigma_I': data_unc
@@ -204,20 +232,42 @@ class SimulateFluoSpec(Prediction):
 @dataclass    
 class FluoSpecModel():
     '''
-    Class for fluospec model. Instantiate with parameters on normal prior, as
-    tuple with (mean, std)
+    Class for fluospec model.
+    Instantiate with parameters:
+        line_prior_params: List of tuples of dicts of kwargs for gamma
+                           priors for each spectral line, in the following order
+                           A, w0, gamma, intensity_ratio
+        {m,b}_prior_params: Dict of kwargs for m,b normal priors
+        likelihood_type: str
+            'normal': default, good if your noise is well-characterized
+            'cauchy': helpful on data that has fine structure
+            'mvnormal': for modeling data with covariances
+        scale_prior_params: Dict of kwargs for scale trunc normal prior
+                            Optional, only applies to 'cauchy' likelihood
+        lkj_prior_params: Dict of kwargs for Cholesky LKJ prior
+                          Optional, only applies to 'mvnormal'
+                            
     
-    Run `FluoSpecModel?` to see order. 
+    Run `FluoSpecModel?` to see order of FluoSpecModel parameters. 
+    
     '''
-    line_prior_params: List[Tuple]
-    m_prior_params: Tuple
-    b_prior_params: Tuple
-    scale_prior_params: Tuple = (None)
+    line_prior_params: List[Tuple[Dict]]
+    m_prior_params: Dict
+    b_prior_params: Dict
+    likelihood_type: str = 'cauchy'
+    scale_prior_params: Dict = field(default_factory=dict)
+    lkj_prior_params: Dict = field(default_factory=dict)
+    
+    def __post_init__(self):
+        valid_likelihoods = ['normal', 'cauchy', 'mvnormal']
+        if self.likelihood_type not in valid_likelihoods:
+            raise ValueError(f"{self.likelihood_type} is not a supported likelihood.")
+    
     
     
     def model(self,
               spec_data_df: pd.DataFrame,
-              likelihood: str = 'normal'
+              cov: np.ndarray = None,
         ) -> pm.Model:
         """
         Builds generative model for fluorescence spectroscopy
@@ -225,13 +275,10 @@ class FluoSpecModel():
         Parameters:
         -----------
         spec_data_df: pd.DataFrame
-            dataframe of data to build model for
-            
-        likelihood: str
-            str indicating the form of the likelihood
-            
-            'normal': default, good if your noise is well-characterized
-            'cauchy': helpful on data that has fine structure
+            dataframe of data to build model
+        
+        cov: np.ndarray
+            Data covariance matrix. Only supported with mvnormal likelihood 
  
         Returns
         -------
@@ -251,29 +298,25 @@ class FluoSpecModel():
                 A_params, w0_params, gamma_params, intensity_params = line_prior
                 specline = SpectralLines(
                                               pm.Gamma(f'A_{i}',
-                                                       mu=A_params[0],
-                                                       sigma=A_params[1]
+                                                       **A_params
                                                        ),
                                               
                                                pm.Gamma(f'w0_{i}',
-                                                        mu=w0_params[0],
-                                                        sigma=w0_params[1]
+                                                        **w0_params
                                                         ),
                                                pm.Gamma(f'gamma_{i}',
-                                                        mu=gamma_params[0],
-                                                        sigma=gamma_params[1]
+                                                        **gamma_params
                                                         ),
                                                 pm.Gamma(f'intensity_ratio_{i}',
-                                                         mu=intensity_params[0],
-                                                         sigma=intensity_params[1]
-                                                         ),
+                                                         **intensity_params
+                                                        ),
                                                )
                 line_priors.append(specline)
                 
 
             
-            m = pm.Normal('m', *self.m_prior_params)
-            b = pm.Normal('b', *self.b_prior_params)
+            m = pm.Normal('m', **self.m_prior_params)
+            b = pm.Normal('b', **self.b_prior_params)
             
             # convenient prior vector
             theta = (line_priors, m, b)
@@ -282,48 +325,103 @@ class FluoSpecModel():
             I_pred = pm.Deterministic('prediction',
                                       Prediction(*theta).prediction(w_data))
             
-            if likelihood == 'mvnormal':
-                print('here')
-                dim = len(I_data)
-                sd_dist = pm.Exponential.dist(sigma_I_data, shape=dim)
-                chol, corr, stds = pm.LKJCholeskyCov('chol_cov', n=dim, eta=100,
-                                                     sd_dist=sd_dist,
-                                                     compute_corr=True
-                                                     )
-                measurements = pm.MvNormal('I_model',
-                                           mu=I_pred,
-                                           chol=chol,
-                                           observed=I_data
-                                           )
-            
-            elif likelihood == 'normal':
+
+                
+            if self.likelihood_type == 'normal':
                 measurements = pm.Normal('I_model',
                                           mu=I_pred,
                                           sigma=sigma_I_data,
-                                          observed=I_data)              
-               
-            elif likelihood == 'cauchy':
+                                          observed=I_data
+                                          )              
+
+            elif self.likelihood_type == 'cauchy':
                 # measurements modeled as Cauchian noise
                 # accounts for broadening of Gaussian instrument noise
                 # with undesired background fine structure
                 
                 scale = pm.TruncatedNormal('scale',
-                                           mu=1,
-                                           sigma=sigma_I_data.iloc[-1]/10,
-                                           lower=sigma_I_data.iloc[-1])
+                                           **self.scale_prior_params
+                                           )
                 
                 measurements = pm.Cauchy('I_model',
                                          alpha=I_pred,
                                          beta=scale,
-                                         observed=I_data)
-
-            else:
-                raise ValueError(f'likelihood = {likelihood} is not valid.')
+                                         observed=I_data
+                                         )
+                
+            # using mvnormal likelihood
+            #
+            # Note thtat this is largely experimental,
+            # The api for this likelihood is unstable
+            elif self.likelihood_type == 'mvnormal':
+                dim = len(I_data)
+                
+                if self.covariance is not None:
+                    measurements = pm.MvNormal('I_model',
+                                               mu=I_pred,
+                                               cov=self.covariance,
+                                               observed=I_data
+                                               )
+                    
+                else:
+                    sd_dist = pm.Exponential.dist(sigma_I_data, shape=dim)
+                    chol, _, _ = pm.LKJCholeskyCov('chol_cov',
+                                                   n=dim,
+                                                   sd_dist=sd_dist,
+                                                   compute_corr=True,
+                                                   **self.lkj_prior_params,
+                                                   )
+                    
+                    measurements = pm.MvNormal('I_model',
+                                               mu=I_pred,
+                                               chol=chol,
+                                               observed=I_data
+                                               )
     
         return spectroscopy_model
 
     # TODO: think about extending above to allow multiple models,
-    #       then create helper for model_comparioson
+    #       then create helper for model_comparison
     def model_comparison():
         raise NotImplementedError
+        
+def model_comparison(model1: FluoSpecModel,
+                     model2: FluoSpecModel,
+                     data: pd.DataFrame
+    ) -> Tuple:
+    '''
+    
+
+    Parameters
+    ----------
+    model1 : FluoSpecModel
+        First model to compare.
+    model2 : FluoSpecModel
+        Second model to compare.
+    data : pd.DataFrame
+        Data to do inference.
+
+    Returns
+    -------
+    Tuple
+        Tuple containing odds ratio and model traces from smc sampler.
+
+    '''
+    with model1.model(data):
+        trace_model1 = pm.sample_smc(2000)
+        
+    with model1.model(data):
+        trace_model2 = pm.sample_smc(2000)
+        
+    odds_ratio = np.exp(trace_model1.report.log_marginal_likelihood - \
+                        trace_model2.report.log_marginal_likelihood)
+        
+    return odds_ratio, trace_model1, trace_model2
+        
+    
+        
+    
+        
+        
+    
     
