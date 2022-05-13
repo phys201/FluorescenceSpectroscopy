@@ -84,11 +84,19 @@ class TestModel(TestCase):
     def test_FluoSpecModel_returns_Model(self):
         model_sim_params = {
                             'line_prior_params': [
-                                                ((2, 1), (30, 2), (5, 1), (.5, .1)),
-                                                ((1, 1), (10, 2), (4, .5), (.5, .1))
+                                                (dict(mu=2, sigma=1),
+                                                 dict(mu=30, sigma=2),
+                                                 dict(mu=5, sigma=1),
+                                                 dict(mu=.5, sigma=.1)
+                                                 ),
+                                                (dict(mu=1, sigma=1),
+                                                 dict(mu=10, sigma=2),
+                                                 dict(mu=4, sigma=.5),
+                                                 dict(mu=.5, sigma=.1))
                                                  ],
-                            'm_prior_params': (.0, .01),
-                            'b_prior_params': (2, .04),
+                            'm_prior_params': dict(mu=.0, sigma=.01),
+                            'b_prior_params': dict(mu=2, sigma=.04),
+                            'likelihood_type': 'normal'
                             }
         data_df = load_data(self.sim_data_path)
         fluospec_model_instance = FluoSpecModel(**model_sim_params)
